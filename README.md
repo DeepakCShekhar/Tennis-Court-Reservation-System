@@ -1,5 +1,5 @@
 # Tennis-Court-Reservation-System
-Simple web application that displays tennis court availability and lets the users create a reservation using drag and drop. Includes a PHP project with sample MySQL/SQLite database.
+Simple web application that displays tennis court availability and lets the users create a reservation using drag and drop.
 
 Features
 Multiple tennis courts, grouped by location (indoor, outdoor)
