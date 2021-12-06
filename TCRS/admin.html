@@ -1,0 +1,282 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+  <title>PHP Tennis Court Reservation (HTML5/JavaScript Frontend, MySQL Database)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <style type="text/css">
+      p, body, td, input, select, button { font-family: -apple-system,system-ui,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif; font-size: 14px; }
+      body { padding: 0px; margin: 0px; background-color: #ffffff; }
+      a { color: #1155a3; }
+      .space { margin: 10px 0px 10px 0px; }
+      .header { background: #003267; background: linear-gradient(to right, #011329 0%,#00639e 44%,#011329 100%); padding:20px 10px; color: white; box-shadow: 0px 0px 10px 5px rgba(0,0,0,0.75); }
+      .header a { color: white; }
+      .header h1 a { text-decoration: none; }
+      .header h1 { padding: 0px; margin: 0px; }
+      .main { padding: 10px; margin-top: 10px; }
+  </style>
+
+  <!-- daypilot libraries -->
+  <script src="js/daypilot/daypilot-all.min.js" type="text/javascript"></script>
+
+</head>
+<body>
+
+<div class="header">
+  <h1><a href='https://code.daypilot.org/11478/php-tennis-court-reservation-html5-javascript-mysql'>PHP Tennis Court Reservation (HTML5/JavaScript Frontend, MySQL Database)</a></h1>
+  <div><a href="https://javascript.daypilot.org/">DayPilot for JavaScript</a> - HTML5 Calendar/Scheduling Components for JavaScript/Angular/React/Vue</div>
+</div>
+
+<div class="main">
+
+  <div class="space">
+    <a href="./">Public</a>
+    |
+    Admin
+  </div>
+
+  <div style="display: flex">
+  <div style="">
+    <div id="nav"></div>
+  </div>
+  <div style="flex-grow: 1; margin-left: 10px;">
+    <div id="dp"></div>
+  </div>
+  </div>
+
+  <script type="text/javascript">
+    const nav = new DayPilot.Navigator("nav");
+
+    nav.onTimeRangeSelected = function (args) {
+      const day = args.day;
+
+      if (dp.visibleStart() <= day && day < dp.visibleEnd()) {
+        dp.scrollTo(day, "fast");
+      } else {
+        const start = day.firstDayOfMonth();
+        const days = day.daysInMonth();
+        dp.startDate = start;
+        dp.days = days;
+        dp.update();
+        dp.scrollTo(day, "fast");
+        loadEvents();
+      }
+    };
+    nav.init();
+
+    const dp = new DayPilot.Scheduler("dp");
+    dp.treeEnabled = true;
+
+    dp.heightSpec = "Max";
+    dp.height = 300;
+
+    dp.scale = "Hour";
+    dp.startDate = DayPilot.Date.today().firstDayOfMonth();
+    dp.days = DayPilot.Date.today().daysInMonth();
+    dp.cellWidth = 50;
+
+    dp.eventHeight = 40;
+    dp.durationBarVisible = false;
+
+    dp.treePreventParentUsage = true;
+
+    var slotPrices = {
+      "06:00": 12,
+      "07:00": 15,
+      "08:00": 15,
+      "09:00": 15,
+      "10:00": 15,
+      "11:00": 12,
+      "12:00": 10,
+      "13:00": 10,
+      "14:00": 12,
+      "15:00": 12,
+      "16:00": 15,
+      "17:00": 15,
+      "18:00": 15,
+      "19:00": 15,
+      "20:00": 15,
+      "21:00": 12,
+      "22:00": 10,
+    };
+
+    dp.onBeforeCellRender = args => {
+
+      if (args.cell.isParent) {
+        return;
+      }
+
+      if (args.cell.start < new DayPilot.Date()) {  // past
+        return;
+      }
+
+      var color = "green";
+
+      var slotId = args.cell.start.toString("HH:mm");
+      var price = slotPrices[slotId];
+
+      var min = 5;
+      var max = 15;
+      var opacity = (price - min) / max;
+      var text = "$" + price;
+      args.cell.areas = [
+        {
+          left: 0,
+          right: 0,
+          top: 0,
+          bottom: 0,
+          backColor: color,
+          fontColor: "white",
+          html: text,
+          style: "display: flex; justify-content: center; align-items: center; opacity: " + opacity
+        }
+      ]
+    };
+
+    dp.timeHeaders = [
+      {groupBy: "Month", format: "MMMM yyyy"},
+      {groupBy: "Day", format: "dddd, MMMM d"},
+      {groupBy: "Hour", format: "h tt"}
+    ];
+
+    dp.businessBeginsHour = 6;
+    dp.businessEndsHour = 23;
+    dp.businessWeekends = true;
+    dp.showNonBusiness = false;
+
+    dp.allowEventOverlap = false;
+
+    dp.bubble = new DayPilot.Bubble();
+
+    // http://api.daypilot.org/daypilot-scheduler-oneventmoved/
+    dp.onEventMoved = async args => {
+
+      const data = {
+        id: args.e.id(),
+        newStart: args.newStart,
+        newEnd: args.newEnd,
+        newResource: args.newResource
+      };
+      await DayPilot.Http.post("backend_move.php", data);
+      dp.message("Moved.");
+
+    };
+
+    // http://api.daypilot.org/daypilot-scheduler-oneventresized/
+    dp.onEventResized = async args => {
+
+      const data = {
+        id: args.e.id(),
+        newStart: args.newStart,
+        newEnd: args.newEnd
+      };
+      await DayPilot.Http.post("backend_resize.php", data);
+      dp.message("Resized.");
+
+    };
+
+    // event creating
+    // http://api.daypilot.org/daypilot-scheduler-ontimerangeselected/
+    dp.onTimeRangeSelected = async args => {
+
+      const courts = []
+        .concat(dp.resources[0].children)
+        .concat(dp.resources[1].children);
+
+      const form = [
+        {name: "Name", id: "name"},
+        {name: "Start", id: "start", dateFormat: "MMMM d, yyyy h:mm tt"},
+        {name: "End", id: "end", dateFormat: "MMMM d, yyyy h:mm tt"},
+        {name: "Court", id: "resource", options: courts},
+      ];
+
+      const data = {
+        start: args.start,
+        end: args.end,
+        resource: args.resource
+      };
+
+
+      const modal = await DayPilot.Modal.form(form, data);
+
+      dp.clearSelection();
+      if (modal.canceled) {
+        return;
+      }
+
+      const {data: result} = await DayPilot.Http.post("backend_create.php", modal.result);
+
+      var e = new DayPilot.Event({
+        start: modal.result.start,
+        end: modal.result.end,
+        id: result.id,
+        resource: modal.result.resource,
+        text: modal.result.name
+      });
+      dp.events.add(e);
+
+      dp.message(result.message);
+
+    };
+
+    dp.onEventClicked = async  args => {
+
+      const courts = []
+        .concat(dp.resources[0].children)
+        .concat(dp.resources[1].children);
+
+      const form = [
+        {name: "Name", id: "name"},
+        {name: "Start", id: "start", dateFormat: "MMMM d, yyyy h:mm tt"},
+        {name: "End", id: "end", dateFormat: "MMMM d, yyyy h:mm tt"},
+        {name: "Court", id: "resource", options: courts},
+      ];
+
+      const data = {
+        id: args.e.data.id,
+        name: args.e.data.text,
+        start: args.e.data.start,
+        end: args.e.data.end,
+        resource: args.e.data.resource
+      };
+
+      const modal = await DayPilot.Modal.form(form, data);
+      dp.clearSelection();
+      if (modal.canceled) {
+        return;
+      }
+      await DayPilot.Http.post("backend_update.php", modal.result);
+
+      const e = {
+        start: modal.result.start,
+        end: modal.result.end,
+        id: modal.result.id,
+        text: modal.result.name,
+        resource: modal.result.resource
+      };
+
+      dp.events.update(e);
+
+    };
+
+    dp.init();
+    dp.scrollTo(DayPilot.Date.now());
+
+    loadResources();
+    loadEvents();
+
+    function loadResources() {
+      dp.rows.load("backend_resources.php");
+    }
+
+    function loadEvents() {
+      dp.events.load("backend_events.php");
+    }
+
+  </script>
+
+</div>
+
+</body>
+</html>
+
